@@ -63,6 +63,25 @@ function App() {
       return [...students].filter(s => s.paid < s.total_fee).sort((a,b) => (b.total_fee - b.paid) - (a.total_fee - a.paid)).slice(0, 5);
   }, [students]);
 
+  const fleetStats = useMemo(() => {
+      const stats = {};
+      students.forEach(s => {
+          const route = s.route || 'Unassigned Bus';
+          if (!stats[route]) {
+              stats[route] = { collected: 0, owed: 0, passengers: 0, boarded: 0 };
+          }
+          const paidNum = Number(s.paid || 0);
+          const totalNum = Number(s.total_fee || 0);
+          stats[route].collected += paidNum;
+          stats[route].owed += Math.max(0, totalNum - paidNum);
+          stats[route].passengers += 1;
+          if (paidNum >= totalNum) {
+              stats[route].boarded += 1;
+          }
+      });
+      return Object.entries(stats).sort((a,b) => a[0].localeCompare(b[0]));
+  }, [students]);
+
   const totalExpected = students.reduce((sum, s) => sum + Number(s.total_fee), 0);
   const totalCollected = students.reduce((sum, s) => sum + Number(s.paid), 0);
   const totalOutstanding = totalExpected - totalCollected;
@@ -551,15 +570,44 @@ function App() {
                           </button>
                       </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white p-3 rounded shadow-sm text-center">
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">Collected</p>
-                          <h3 className="text-xl font-bold text-emerald-600">GH₵{totalCollected}</h3>
+                  
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white p-3 rounded-xl shadow-sm text-center border-l-4 border-emerald-500">
+                          <p className="text-xs text-slate-500 font-bold mb-1">TOTAL COLLECTED</p>
+                          <p className="text-2xl font-black text-emerald-600">GH₵{totalCollected}</p>
                       </div>
-                      <div className="bg-white p-3 rounded shadow-sm text-center">
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">Outstanding</p>
-                          <h3 className="text-xl font-bold text-rose-600">GH₵{totalOutstanding}</h3>
+                      <div className="bg-white p-3 rounded-xl shadow-sm text-center border-l-4 border-rose-500">
+                          <p className="text-xs text-slate-500 font-bold mb-1">TOTAL OUTSTANDING</p>
+                          <p className="text-2xl font-black text-rose-600">GH₵{totalOutstanding}</p>
                       </div>
+                  </div>
+
+                  <h3 className="font-black text-lg mb-2 text-slate-800">Fleet Command Center</h3>
+                  <div className="space-y-3 mb-6">
+                      {fleetStats.map(([route, stats]) => (
+                          <div key={route} className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden transition-all hover:shadow-md">
+                              <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
+                              <div className="pl-2">
+                                  <h4 className="font-bold text-slate-800 text-sm mb-2 flex items-center gap-2">
+                                      <span>🚌</span> {route}
+                                  </h4>
+                                  <div className="grid grid-cols-3 gap-2">
+                                      <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                          <p className="text-[10px] text-slate-500 font-bold uppercase">Collected</p>
+                                          <p className="text-sm font-black text-emerald-600">GH₵{stats.collected}</p>
+                                      </div>
+                                      <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                          <p className="text-[10px] text-slate-500 font-bold uppercase">Owed</p>
+                                          <p className="text-sm font-black text-rose-600">GH₵{stats.owed}</p>
+                                      </div>
+                                      <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                          <p className="text-[10px] text-slate-500 font-bold uppercase">Boarded</p>
+                                          <p className="text-sm font-black text-indigo-600">{stats.boarded}/{stats.passengers}</p>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
                   </div>
                   
                   <div className="bg-white p-3 rounded shadow-sm">
