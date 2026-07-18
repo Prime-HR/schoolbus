@@ -221,11 +221,18 @@ function App() {
   };
 
   const handleSaveStudent = async () => {
-      const totalFeeNum = parseFloat(formData.totalFee) || 0;
-      const paidNum = parseFloat(formData.paid) || 0;
-      
-      if (!formData.name.trim()) return alert('Name is required');
-      if (totalFeeNum <= 0) return alert('Total fee must be greater than 0');
+      if (!formData.name) return;
+      const paidNum = Number(formData.paid) || 0;
+      const totalFeeNum = Number(formData.totalFee) || 0;
+
+      if (!editingStudent) {
+          // Prevent double entry by checking if the name already exists
+          const isDuplicate = students.some(s => s.name.toLowerCase() === formData.name.toLowerCase().trim());
+          if (isDuplicate) {
+              alert("⚠️ DOUBLE ENTRY DETECTED: A student with this exact name already exists. Please add an initial or last name to distinguish them.");
+              return;
+          }
+      }
 
       if (editingStudent) {
           await updateStudent(editingStudent.id, {
