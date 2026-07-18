@@ -11,6 +11,7 @@ function App() {
   const [view, setView] = useState('driver'); 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedRoute, setSelectedRoute] = useState('All');
   
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [feeDue, setFeeDue] = useState('');
@@ -19,7 +20,7 @@ function App() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [formData, setFormData] = useState({ name: '', grade: '', plan: 'Monthly', totalFee: '', paid: '' });
+  const [formData, setFormData] = useState({ name: '', grade: '', plan: 'Monthly', totalFee: '', paid: '', route: '', stop_name: '' });
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isKeypadOpen, setIsKeypadOpen] = useState(false);
@@ -31,12 +32,32 @@ function App() {
   const filteredStudents = useMemo(() => {
       return students.filter(s => {
           const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.grade.toLowerCase().includes(search.toLowerCase());
+          const matchesRoute = selectedRoute === 'All' || s.route === selectedRoute;
           const isPaid = s.paid >= s.total_fee;
-          if (filter === 'paid') return matchesSearch && isPaid;
-          if (filter === 'unpaid') return matchesSearch && !isPaid;
-          return matchesSearch;
+          if (filter === 'paid') return matchesSearch && matchesRoute && isPaid;
+          if (filter === 'unpaid') return matchesSearch && matchesRoute && !isPaid;
+          return matchesSearch && matchesRoute;
       });
-  }, [students, search, filter]);
+  }, [students, search, filter, selectedRoute]);
+
+  const groupedByStop = useMemo(() => {
+      const groups = {};
+      filteredStudents.forEach(s => {
+          const stop = s.stop_name || 'Unassigned Stop';
+          if (!groups[stop]) groups[stop] = [];
+          groups[stop].push(s);
+      });
+      // Sort keys alphabetically
+      return Object.keys(groups).sort().reduce((acc, key) => {
+          acc[key] = groups[key];
+          return acc;
+      }, {});
+  }, [filteredStudents]);
+
+  const uniqueRoutes = useMemo(() => {
+      const routes = new Set(students.map(s => s.route).filter(Boolean));
+      return ['All', ...Array.from(routes).sort()];
+  }, [students]);
 
   const topDebtors = useMemo(() => {
       return [...students].filter(s => s.paid < s.total_fee).sort((a,b) => (b.total_fee - b.paid) - (a.total_fee - a.paid)).slice(0, 5);
@@ -162,7 +183,7 @@ function App() {
 
   const openAddModal = () => {
       setEditingStudent(null);
-      setFormData({ name: '', grade: '', plan: 'Monthly', totalFee: '', paid: '0' });
+      setFormData({ name: '', grade: '', plan: 'Monthly', totalFee: '', paid: '0', route: '', stop_name: '' });
       setIsModalOpen(true);
   };
 
@@ -173,7 +194,9 @@ function App() {
           grade: student.grade,
           plan: student.plan || 'Monthly',
           totalFee: student.total_fee.toString(),
-          paid: student.paid.toString()
+          paid: student.paid.toString(),
+          route: student.route || '',
+          stop_name: student.stop_name || ''
       });
       setIsModalOpen(true);
   };
@@ -187,11 +210,11 @@ function App() {
 
       if (editingStudent) {
           await updateStudent(editingStudent.id, {
-              name: formData.name, grade: formData.grade, plan: formData.plan, total_fee: totalFeeNum, paid: paidNum
+              name: formData.name, grade: formData.grade, plan: formData.plan, total_fee: totalFeeNum, paid: paidNum, route: formData.route, stop_name: formData.stop_name
           });
       } else {
           await addStudent({
-              name: formData.name, grade: formData.grade || '-', plan: formData.plan, total_fee: totalFeeNum, paid: paidNum
+              name: formData.name, grade: formData.grade || '-', plan: formData.plan, total_fee: totalFeeNum, paid: paidNum, route: formData.route, stop_name: formData.stop_name
           });
       }
       setIsModalOpen(false);
@@ -403,46 +426,61 @@ function App() {
                           <button onClick={() => setFilter('unpaid')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'unpaid' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500'}`}>Unpaid 🛑</button>
                       </div>
 
-                      <input type="text" placeholder="Search..." className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" value={search} onChange={(e) => setSearch(e.target.value)} />
+                      {uniqueRoutes.length > 1 && (
+                          <div className="mb-3">
+                              <select 
+                                  value={selectedRoute} 
+                                  onChange={(e) => setSelectedRoute(e.target.value)}
+                                  className="w-full bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+                              >
+                                  {uniqueRoutes.map(route => (
+                                      <option key={route} value={route}>{route === 'All' ? '🚌 All Routes' : `🚌 ${route}`}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      )}
+
+                      <input type="text" placeholder="Search passenger..." className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" value={search} onChange={(e) => setSearch(e.target.value)} />
                       
-                      <div className="space-y-3">
-                          {filteredStudents.map(student => {
-                              const status = getStatus(student.paid, student.total_fee);
-                              const owed = student.total_fee - student.paid;
-                              return (
-                                  <div key={student.id} className="border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
-                                      <div className="flex justify-between items-start">
-                                          <div>
-                                              <div className="flex items-center">
-                                                  <h3 className="font-bold text-slate-900 mr-2">{student.name}</h3>
-                                                  <button onClick={() => openEditModal(student)} className="text-indigo-500 text-xs">Edit</button>
-                                              </div>
-                                              <div className="flex gap-1 mt-1">
-                                                  <span className="text-[10px] bg-slate-100 px-1 rounded border">{student.grade}</span>
-                                                  <span className={`text-[10px] px-1 rounded border ${getPlanColor(student.plan)}`}>{student.plan}</span>
-                                              </div>
-                                          </div>
-                                          <div className="flex flex-col items-end gap-1">
-                                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${status.color}`}>{status.label}</span>
-                                              <button onClick={() => shareReceiptWA(student)} className="text-green-600 bg-green-50 p-1 rounded-full border border-green-200" title="WhatsApp Receipt">
-                                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
-                                              </button>
-                                          </div>
-                                      </div>
-                                      <div className="flex justify-between items-center mt-1 border-t pt-2">
-                                          <div className="text-xs">
-                                              Paid: <b>GH₵{student.paid}</b> / {student.total_fee}
-                                          </div>
-                                          {student.paid < student.total_fee && (
-                                              <div className="flex gap-2">
-                                                  <button onClick={() => handleQuickPay(student)} className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded">Exact GH₵{owed}</button>
-                                                  <button onClick={() => handleAddPaymentClick(student)} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded">Pay</button>
-                                              </div>
-                                          )}
-                                      </div>
+                      <div className="space-y-4">
+                          {Object.entries(groupedByStop).map(([stop, stopStudents]) => (
+                              <div key={stop} className="mb-4">
+                                  <div className="flex items-center gap-2 mb-2 pl-1">
+                                      <span className="text-lg">📍</span>
+                                      <h3 className="font-bold text-slate-700 text-sm">{stop}</h3>
+                                      <span className="bg-slate-200 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full">{stopStudents.length}</span>
                                   </div>
-                              )
-                          })}
+                                  <div className="space-y-2 border-l-2 border-slate-100 pl-3 ml-2">
+                                      {stopStudents.map(student => {
+                                          const status = getStatus(student.paid, student.total_fee);
+                                          const owed = student.total_fee - student.paid;
+                                          return (
+                                              <div key={student.id} onClick={() => { setSelectedStudentId(student.id); setFeeDue(owed > 0 ? owed : ''); }} className={`p-3 rounded-xl border cursor-pointer active:scale-95 transition-transform ${selectedStudentId === student.id ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-100 bg-slate-50'}`}>
+                                                  <div className="flex justify-between items-center">
+                                                      <div>
+                                                          <h3 className="font-bold text-sm text-slate-800">{student.name}</h3>
+                                                          <p className="text-xs text-slate-500 font-medium">{student.grade}</p>
+                                                      </div>
+                                                      <div className="text-right flex flex-col items-end">
+                                                          <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${status.color}`}>
+                                                              {status.label}
+                                                          </span>
+                                                          {owed > 0 && <span className="text-xs font-bold text-rose-600 mt-1">Owes GH₵{owed}</span>}
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          );
+                                      })}
+                                  </div>
+                              </div>
+                          ))}
+                          
+                          {filteredStudents.length === 0 && (
+                              <div className="text-center p-8 text-slate-400">
+                                  <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"></path></svg>
+                                  <p className="text-sm font-bold">No passengers found.</p>
+                              </div>
+                          )}
                       </div>
                   </section>
 
@@ -560,10 +598,19 @@ function App() {
                       <input className="w-full border p-2 mb-2 rounded" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} placeholder="Name"/>
                       <input className="w-full border p-2 mb-2 rounded" value={formData.grade} onChange={e=>setFormData({...formData, grade: e.target.value})} placeholder="Grade"/>
                       <select className="w-full border p-2 mb-2 rounded" value={formData.plan} onChange={e=>setFormData({...formData, plan: e.target.value})}>
-                          <option>Daily</option><option>Monthly</option><option>Termly</option>
+                          <option value="Daily">Daily</option>
+                          <option value="Monthly">Monthly</option>
+                          <option value="Termly">Termly</option>
                       </select>
+                      
+                      <div className="flex gap-2 mb-2">
+                          <input type="text" className="w-1/2 border p-2 rounded bg-slate-50" value={formData.route} onChange={e=>setFormData({...formData, route: e.target.value})} placeholder="Route (e.g. Morning A)"/>
+                          <input type="text" className="w-1/2 border p-2 rounded bg-slate-50" value={formData.stop_name} onChange={e=>setFormData({...formData, stop_name: e.target.value})} placeholder="Stop (e.g. Osu Mall)"/>
+                      </div>
+
                       <input type="number" className="w-full border p-2 mb-2 rounded" value={formData.totalFee} onChange={e=>setFormData({...formData, totalFee: e.target.value})} placeholder="Total Fee"/>
                       <input type="number" className="w-full border p-2 mb-4 rounded" value={formData.paid} onChange={e=>setFormData({...formData, paid: e.target.value})} placeholder="Paid"/>
+                      
                       {editingStudent && (
                           <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-xl mb-4">
                               <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Student QR Code</p>

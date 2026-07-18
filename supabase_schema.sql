@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS public.students (
     plan TEXT NOT NULL CHECK (plan IN ('Daily', 'Monthly', 'Termly')),
     total_fee NUMERIC NOT NULL DEFAULT 0,
     paid NUMERIC NOT NULL DEFAULT 0,
+    route TEXT DEFAULT '',
+    stop_name TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
