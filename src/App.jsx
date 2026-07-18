@@ -191,13 +191,16 @@ function App() {
   };
 
   const handleDeleteStudent = async () => {
-      if (window.confirm("Are you sure you want to delete this student?")) {
+      const confirmName = window.prompt(`WARNING: This will permanently delete ${editingStudent.name}.\n\nTo confirm, please type the student's exact name below:`);
+      if (confirmName === editingStudent.name) {
           await deleteStudent(editingStudent.id);
           setIsModalOpen(false);
           if (selectedStudentId === editingStudent.id) {
               setSelectedStudentId(null);
               setFeeDue('');
           }
+      } else if (confirmName !== null) {
+          alert("Name did not match. Deletion cancelled.");
       }
   };
 
@@ -456,8 +459,13 @@ function App() {
                       </select>
                       <input type="number" className="w-full border p-2 mb-2 rounded" value={formData.totalFee} onChange={e=>setFormData({...formData, totalFee: e.target.value})} placeholder="Total Fee"/>
                       <input type="number" className="w-full border p-2 mb-4 rounded" value={formData.paid} onChange={e=>setFormData({...formData, paid: e.target.value})} placeholder="Paid"/>
-                      <button onClick={handleSaveStudent} className="w-full bg-indigo-600 text-white font-bold py-2 rounded mb-2">Save</button>
-                      <button onClick={()=>setIsModalOpen(false)} className="w-full bg-slate-200 font-bold py-2 rounded">Cancel</button>
+                      <button onClick={handleSaveStudent} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl mb-2 transition-colors">Save</button>
+                      <button onClick={()=>setIsModalOpen(false)} className="w-full bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl transition-colors">Cancel</button>
+                      {editingStudent && (
+                          <button onClick={handleDeleteStudent} className="w-full bg-white text-rose-600 font-bold py-2.5 rounded-xl border border-rose-200 mt-4 hover:bg-rose-50 transition-colors">
+                              Delete Student
+                          </button>
+                      )}
                   </div>
               </div>
           )}
