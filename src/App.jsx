@@ -7,7 +7,7 @@ const DENOMINATIONS = [200, 100, 50, 20, 10, 5, 2, 1];
 const QUICK_BILLS = [100, 50, 20, 10, 5];
 
 function App() {
-  const { user, login, logout, students, transactions, till, loading, addStudent, updateStudent, deleteStudent, recordTransaction, updateTill } = useSupabase();
+  const { user, login, logout, students, transactions, tickets, till, loading, addStudent, updateStudent, deleteStudent, recordTransaction, updateTill, generateTickets, useTicket } = useSupabase();
   const [view, setView] = useState('driver'); 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -22,6 +22,8 @@ function App() {
   const [formData, setFormData] = useState({ name: '', grade: '', plan: 'Monthly', totalFee: '', paid: '' });
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isKeypadOpen, setIsKeypadOpen] = useState(false);
+  const [keypadInput, setKeypadInput] = useState('');
   const [scanResult, setScanResult] = useState(null);
 
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId) || null, [students, selectedStudentId]);
@@ -321,6 +323,47 @@ function App() {
       }
   };
 
+  const handleKeypadSubmit = async (code) => {
+      const res = await useTicket(code);
+      if (res.success) {
+          setScanResult({
+              status: 'success',
+              title: `Code ${code}`,
+              message: 'TICKET VALID - BOARDED'
+          });
+      } else {
+          setScanResult({
+              status: 'error',
+              title: `Code ${code}`,
+              message: res.error
+          });
+      }
+      setIsKeypadOpen(false);
+      setKeypadInput('');
+      
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      osc.type = res.success ? 'sine' : 'sawtooth';
+      osc.frequency.setValueAtTime(res.success ? 800 : 200, ctx.currentTime);
+      osc.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.2);
+      
+      setTimeout(() => {
+          setScanResult(null);
+      }, 3000);
+  };
+
+  const handleKeypadPress = (num) => {
+      if (keypadInput.length < 3) {
+          const newVal = keypadInput + num;
+          setKeypadInput(newVal);
+          if (newVal.length === 3) {
+              handleKeypadSubmit(newVal);
+          }
+      }
+  };
+
   return (
       <div className="w-full max-w-md mx-auto h-[100dvh] bg-slate-50 shadow-2xl flex flex-col relative font-sans overflow-hidden">
           <header className="bg-slate-900 text-white p-4 shadow-md relative z-20 flex-shrink-0">
@@ -444,10 +487,15 @@ function App() {
                       </div>
                   </section>
                   
-                  {/* Floating Action Button for Scanner */}
-                  <button onClick={() => setIsScannerOpen(true)} className="fixed bottom-6 right-6 bg-indigo-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white z-40 active:scale-95 transition-transform" title="Scan QR Code">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                  </button>
+                  {/* Floating Action Buttons */}
+                  <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-40">
+                      <button onClick={() => setIsKeypadOpen(true)} className="bg-slate-800 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border-2 border-slate-700 active:scale-95 transition-transform" title="Enter Secret Code">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                      </button>
+                      <button onClick={() => setIsScannerOpen(true)} className="bg-indigo-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white active:scale-95 transition-transform" title="Scan QR Code">
+                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                      </button>
+                  </div>
               </main>
           )}
 
@@ -473,6 +521,22 @@ function App() {
                       <div className="bg-white p-3 rounded shadow-sm text-center">
                           <p className="text-[10px] text-slate-500 font-bold uppercase">Outstanding</p>
                           <h3 className="text-xl font-bold text-rose-600">GH₵{totalOutstanding}</h3>
+                      </div>
+                  </div>
+                  
+                  <div className="bg-white p-3 rounded shadow-sm">
+                      <div className="flex justify-between items-center mb-2">
+                          <h3 className="font-bold">Tickets (Secret Codes)</h3>
+                          <button onClick={() => generateTickets(10)} className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-bold">Generate 10</button>
+                      </div>
+                      <div className="flex gap-2 mb-2">
+                          <div className="flex-1 bg-slate-50 p-2 text-center rounded"><p className="text-[10px] text-slate-500 font-bold">UNUSED</p><p className="font-bold">{tickets.filter(t => !t.is_used).length}</p></div>
+                          <div className="flex-1 bg-slate-50 p-2 text-center rounded"><p className="text-[10px] text-slate-500 font-bold">USED</p><p className="font-bold">{tickets.filter(t => t.is_used).length}</p></div>
+                      </div>
+                      <div className="max-h-32 overflow-y-auto flex gap-2 flex-wrap">
+                          {tickets.filter(t => !t.is_used).map(t => (
+                              <span key={t.id} className="bg-emerald-100 text-emerald-800 font-mono text-xs px-2 py-1 rounded border border-emerald-200">{t.code}</span>
+                          ))}
                       </div>
                   </div>
                   
@@ -544,6 +608,44 @@ function App() {
               </div>
           )}
 
+          {/* Keypad Modal */}
+          {isKeypadOpen && (
+              <div className="absolute inset-0 bg-slate-900/95 z-50 flex flex-col items-center justify-center p-6 animate-fadeIn">
+                  <div className="w-full max-w-xs">
+                      <div className="text-center mb-8">
+                          <h2 className="text-white text-xl font-bold opacity-80 mb-2">Enter Secret Code</h2>
+                          <div className="flex justify-center gap-4">
+                              {[0,1,2].map(i => (
+                                  <div key={i} className={`w-16 h-20 rounded-xl border-2 flex items-center justify-center text-4xl font-mono text-white transition-all ${keypadInput.length > i ? 'bg-indigo-600 border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 'bg-slate-800 border-slate-700'}`}>
+                                      {keypadInput[i] || ''}
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 mb-8">
+                          {[1,2,3,4,5,6,7,8,9].map(num => (
+                              <button key={num} onClick={() => handleKeypadPress(num.toString())} className="bg-slate-800 text-white rounded-2xl h-16 text-2xl font-bold shadow-lg active:scale-95 active:bg-slate-700 transition-all border border-slate-700">
+                                  {num}
+                              </button>
+                          ))}
+                          <div className="col-start-2">
+                              <button onClick={() => handleKeypadPress('0')} className="w-full bg-slate-800 text-white rounded-2xl h-16 text-2xl font-bold shadow-lg active:scale-95 active:bg-slate-700 transition-all border border-slate-700">
+                                  0
+                              </button>
+                          </div>
+                          <div className="col-start-3 flex items-center justify-center">
+                              <button onClick={() => setKeypadInput(prev => prev.slice(0, -1))} className="text-slate-400 active:text-white transition-colors p-4">
+                                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z"></path></svg>
+                              </button>
+                          </div>
+                      </div>
+                      <button onClick={() => { setIsKeypadOpen(false); setKeypadInput(''); }} className="w-full text-slate-400 font-bold py-4 rounded-xl active:bg-slate-800 transition-colors uppercase tracking-wider text-sm">
+                          Cancel
+                      </button>
+                  </div>
+              </div>
+          )}
+
           {/* Scan Result Flash Screen */}
           {scanResult && (
               <div className={`absolute inset-0 z-[60] flex flex-col items-center justify-center p-6 text-center animate-fadeIn ${scanResult.status === 'success' ? 'bg-emerald-500' : 'bg-rose-600'}`}>
@@ -554,8 +656,8 @@ function App() {
                           <svg className="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                       )}
                   </div>
-                  <h1 className="text-5xl font-black text-white mb-2">{scanResult.student.name}</h1>
-                  <p className="text-white text-xl font-bold opacity-90">{scanResult.student.grade}</p>
+                  <h1 className="text-5xl font-black text-white mb-2">{scanResult.title || (scanResult.student && scanResult.student.name)}</h1>
+                  {(scanResult.student && scanResult.student.grade) && <p className="text-white text-xl font-bold opacity-90">{scanResult.student.grade}</p>}
                   <div className="mt-8 bg-white text-slate-900 px-6 py-3 rounded-xl shadow-2xl font-black text-2xl tracking-wide">
                       {scanResult.message}
                   </div>
