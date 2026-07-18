@@ -8,6 +8,7 @@ function App() {
   const { user, login, logout, students, transactions, till, loading, addStudent, updateStudent, deleteStudent, recordTransaction, updateTill } = useSupabase();
   const [view, setView] = useState('driver'); 
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all');
   
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [feeDue, setFeeDue] = useState('');
@@ -21,8 +22,14 @@ function App() {
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId) || null, [students, selectedStudentId]);
 
   const filteredStudents = useMemo(() => {
-      return students.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.grade.toLowerCase().includes(search.toLowerCase()));
-  }, [students, search]);
+      return students.filter(s => {
+          const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.grade.toLowerCase().includes(search.toLowerCase());
+          const isPaid = s.paid >= s.total_fee;
+          if (filter === 'paid') return matchesSearch && isPaid;
+          if (filter === 'unpaid') return matchesSearch && !isPaid;
+          return matchesSearch;
+      });
+  }, [students, search, filter]);
 
   const topDebtors = useMemo(() => {
       return [...students].filter(s => s.paid < s.total_fee).sort((a,b) => (b.total_fee - b.paid) - (a.total_fee - a.paid)).slice(0, 5);
@@ -276,8 +283,8 @@ function App() {
   const totalTillValue = DENOMINATIONS.reduce((sum, denom) => sum + (denom * (till[`denom_${denom}`] || 0)), 0);
 
   return (
-      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl overflow-hidden pb-20 flex flex-col relative font-sans">
-          <header className="bg-slate-900 text-white p-5 shadow-md relative z-20 sticky top-0">
+      <div className="w-full max-w-md mx-auto h-[100dvh] bg-slate-50 shadow-2xl flex flex-col relative font-sans overflow-hidden">
+          <header className="bg-slate-900 text-white p-4 shadow-md relative z-20 flex-shrink-0">
               <div className="flex justify-between items-center">
                   <div>
                       <h1 className="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">BusFee CLOUD</h1>
@@ -297,18 +304,26 @@ function App() {
 
           {/* DRIVER VIEW */}
           {view === 'driver' && (
-              <main className="p-3 space-y-5 flex-1 animate-fadeIn">
-                  <section className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+              <main className="p-3 space-y-4 flex-1 overflow-y-auto animate-fadeIn">
+                  <section className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col flex-shrink-0">
                       <div className="flex justify-between items-center mb-3">
                           <h2 className="text-base font-bold text-slate-800 flex items-center">
-                              Passengers List
+                              Boarding List
                           </h2>
                           <button onClick={openAddModal} className="bg-indigo-100 text-indigo-700 active:bg-indigo-200 px-3 py-1.5 rounded-full shadow-sm transition-colors text-xs font-bold">
-                              Add
+                              Add Student
                           </button>
                       </div>
-                      <input type="text" placeholder="Search..." className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 mb-4" value={search} onChange={(e) => setSearch(e.target.value)} />
-                      <div className="space-y-3 max-h-[35vh] overflow-y-auto">
+                      
+                      <div className="flex bg-slate-100 rounded-lg p-1 mb-3">
+                          <button onClick={() => setFilter('all')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'all' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>All</button>
+                          <button onClick={() => setFilter('paid')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'paid' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500'}`}>Paid ✅</button>
+                          <button onClick={() => setFilter('unpaid')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'unpaid' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500'}`}>Unpaid 🛑</button>
+                      </div>
+
+                      <input type="text" placeholder="Search..." className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" value={search} onChange={(e) => setSearch(e.target.value)} />
+                      
+                      <div className="space-y-3">
                           {filteredStudents.map(student => {
                               const status = getStatus(student.paid, student.total_fee);
                               const owed = student.total_fee - student.paid;
@@ -394,7 +409,7 @@ function App() {
 
           {/* ADMIN VIEW */}
           {view === 'owner' && (
-              <main className="p-3 space-y-4 flex-1 bg-slate-100">
+              <main className="p-3 space-y-4 flex-1 overflow-y-auto bg-slate-100">
                   <div className="flex justify-between items-end mb-2">
                       <h2 className="text-xl font-black">Business Overview</h2>
                       <div className="flex gap-2">
