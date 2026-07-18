@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSupabase } from './hooks/useSupabase';
+import { Scanner } from '@yudiel/react-qr-scanner';
+import QRCode from 'react-qr-code';
 
 const DENOMINATIONS = [200, 100, 50, 20, 10, 5, 2, 1];
 const QUICK_BILLS = [100, 50, 20, 10, 5];
@@ -18,6 +20,9 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [formData, setFormData] = useState({ name: '', grade: '', plan: 'Monthly', totalFee: '', paid: '' });
+
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
 
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId) || null, [students, selectedStudentId]);
 
@@ -285,6 +290,37 @@ function App() {
 
   const totalTillValue = DENOMINATIONS.reduce((sum, denom) => sum + (denom * (till[`denom_${denom}`] || 0)), 0);
 
+  const handleScan = (result) => {
+      if (!result || !result[0]) return;
+      const scannedId = result[0].rawValue;
+      const student = students.find(s => s.id === scannedId);
+      
+      if (student) {
+          const isPaid = student.paid >= student.total_fee;
+          setScanResult({
+              student,
+              status: isPaid ? 'success' : 'error',
+              message: isPaid ? 'BOARDED - PAID' : `UNPAID: OWES GH₵${student.total_fee - student.paid}`
+          });
+          setIsScannerOpen(false);
+          // Play a simple beep
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          osc.type = isPaid ? 'sine' : 'sawtooth';
+          osc.frequency.setValueAtTime(isPaid ? 800 : 200, ctx.currentTime);
+          osc.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.2);
+          
+          setTimeout(() => {
+              setScanResult(null);
+              // Option to reopen scanner automatically or stay on list
+          }, 3000);
+      } else {
+          alert('Invalid QR Code. Student not found.');
+      }
+  };
+
   return (
       <div className="w-full max-w-md mx-auto h-[100dvh] bg-slate-50 shadow-2xl flex flex-col relative font-sans overflow-hidden">
           <header className="bg-slate-900 text-white p-4 shadow-md relative z-20 flex-shrink-0">
@@ -407,6 +443,11 @@ function App() {
                           ))}
                       </div>
                   </section>
+                  
+                  {/* Floating Action Button for Scanner */}
+                  <button onClick={() => setIsScannerOpen(true)} className="fixed bottom-6 right-6 bg-indigo-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white z-40 active:scale-95 transition-transform" title="Scan QR Code">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                  </button>
               </main>
           )}
 
@@ -459,6 +500,15 @@ function App() {
                       </select>
                       <input type="number" className="w-full border p-2 mb-2 rounded" value={formData.totalFee} onChange={e=>setFormData({...formData, totalFee: e.target.value})} placeholder="Total Fee"/>
                       <input type="number" className="w-full border p-2 mb-4 rounded" value={formData.paid} onChange={e=>setFormData({...formData, paid: e.target.value})} placeholder="Paid"/>
+                      {editingStudent && (
+                          <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-xl mb-4">
+                              <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Student QR Code</p>
+                              <div className="p-2 bg-white rounded-lg shadow-sm">
+                                  <QRCode value={editingStudent.id} size={150} />
+                              </div>
+                          </div>
+                      )}
+                      
                       <button onClick={handleSaveStudent} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl mb-2 transition-colors">Save</button>
                       <button onClick={()=>setIsModalOpen(false)} className="w-full bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl transition-colors">Cancel</button>
                       {editingStudent && (
@@ -466,6 +516,48 @@ function App() {
                               Delete Student
                           </button>
                       )}
+                  </div>
+              </div>
+          )}
+
+          {/* QR Scanner Modal */}
+          {isScannerOpen && (
+              <div className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center">
+                  <div className="relative w-full h-[80dvh] bg-black flex items-center justify-center overflow-hidden">
+                      <Scanner 
+                          onScan={handleScan}
+                          formats={['qr_code']}
+                          components={{
+                              audio: false,
+                              finder: true,
+                          }}
+                          styles={{
+                              container: { width: '100%', height: '100%' }
+                          }}
+                      />
+                  </div>
+                  <div className="h-[20dvh] w-full flex items-center justify-center bg-slate-900 pb-8">
+                      <button onClick={() => setIsScannerOpen(false)} className="bg-white text-slate-900 font-bold px-8 py-3 rounded-full text-lg shadow-xl active:scale-95 transition-transform">
+                          Close Scanner
+                      </button>
+                  </div>
+              </div>
+          )}
+
+          {/* Scan Result Flash Screen */}
+          {scanResult && (
+              <div className={`absolute inset-0 z-[60] flex flex-col items-center justify-center p-6 text-center animate-fadeIn ${scanResult.status === 'success' ? 'bg-emerald-500' : 'bg-rose-600'}`}>
+                  <div className="bg-white/20 p-6 rounded-full mb-6">
+                      {scanResult.status === 'success' ? (
+                          <svg className="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                      ) : (
+                          <svg className="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      )}
+                  </div>
+                  <h1 className="text-5xl font-black text-white mb-2">{scanResult.student.name}</h1>
+                  <p className="text-white text-xl font-bold opacity-90">{scanResult.student.grade}</p>
+                  <div className="mt-8 bg-white text-slate-900 px-6 py-3 rounded-xl shadow-2xl font-black text-2xl tracking-wide">
+                      {scanResult.message}
                   </div>
               </div>
           )}
